@@ -4,13 +4,17 @@ project(remoteSerial VERSION 0.1.0 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-add_executable(remoteSerial
-    src/main.cpp
-    src/serial/serial_port.cpp
-    src/serial/serial_manager.cpp
-    src/http/http_server.cpp
-    src/utils/logger.cpp
+
+add_executable(${PROJECT_NAME}
+src/main.cpp
+src/serial/serial_port.cpp
+src/serial/serial_manager.cpp
+src/http/http_server.cpp
+src/utils/logger.cpp
 )
 
-target_include_directories(remoteSerial PRIVATE src)
+target_include_directories(${PROJECT_NAME} PRIVATE src)
+
+# 包含依赖项
+include(cmake/dependences.cmake)
 
