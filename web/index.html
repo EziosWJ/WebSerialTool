@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Remote Serial</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Remote Serial Debug</h1>
+      <div class="status" id="status">Status: <span id="statusText">disconnected</span></div>
+    </header>
+
+    <section class="panel">
+      <h2>串口设置</h2>
+      <div class="form-row">
+        <label>串口：</label>
+        <select id="ports"></select>
+        <button id="refresh">刷新</button>
+      </div>
+      <div class="form-row">
+        <label>波特率：</label>
+        <input id="baud" type="number" value="115200" />
+        <label>数据位：</label>
+        <select id="databits">
+          <option>8</option>
+          <option>7</option>
+          <option>6</option>
+          <option>5</option>
+        </select>
+        <label>停止位：</label>
+        <select id="stopbits">
+          <option>1</option>
+          <option>2</option>
+        </select>
+        <label>校验：</label>
+        <select id="parity">
+          <option value="none">None</option>
+          <option value="even">Even</option>
+          <option value="odd">Odd</option>
+        </select>
+      </div>
+
+      <div class="buttons">
+        <button id="openBtn">打开</button>
+        <button id="closeBtn" disabled>关闭</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>发送数据</h2>
+      <div class="form-row">
+        <textarea id="sendData" rows="3" placeholder="输入要发送的内容"></textarea>
+      </div>
+      <div class="form-row">
+        <label>格式：</label>
+        <select id="sendFormat">
+          <option value="ascii" selected>ASCII</option>
+          <option value="hex">HEX</option>
+        </select>
+        <button id="sendBtn">发送</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>接收数据</h2>
+      <div class="toolbar">
+        <label>显示：</label>
+        <select id="displayFormat">
+          <option value="hex">HEX</option>
+          <option value="ascii" selected>ASCII</option>
+        </select>
+        <button id="clearBtn">清空</button>
+      </div>
+      <pre id="log" class="log"></pre>
+    </section>
+  </div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

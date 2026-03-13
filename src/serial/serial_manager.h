@@ -2,17 +2,23 @@
 
 #include "serial/serial_port.h"
 
+#include <asio.hpp>
+#include <atomic>
+#include <chrono>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace remote_serial {
 
 class SerialManager {
 public:
-    SerialManager();
+    using DataCallback = std::function<void(const std::string& port, const std::vector<uint8_t>& data)>;
+
+    explicit SerialManager(asio::io_context& io_context);
     ~SerialManager();
 
     bool OpenPort(const std::string& port,
@@ -24,14 +30,40 @@ public:
     bool ClosePort(const std::string& port);
 
     bool WritePort(const std::string& port, const std::vector<uint8_t>& data);
-
-    std::vector<uint8_t> ReadPort(const std::string& port);
+    void WritePortAsync(const std::string& port, const std::vector<uint8_t>& data, std::function<void(bool)> callback);
 
     std::vector<std::string> ListPorts() const;
 
+    void SetDataCallback(DataCallback cb);
+
 private:
+    struct PortEntry {
+        PortEntry() = default;
+        PortEntry(PortEntry&& rhs) noexcept
+            : serial(std::move(rhs.serial)),
+              reader_thread(std::move(rhs.reader_thread)),
+              running(rhs.running.load()) {
+        }
+        PortEntry& operator=(PortEntry&& rhs) noexcept {
+            if (this != &rhs) {
+                serial = std::move(rhs.serial);
+                reader_thread = std::move(rhs.reader_thread);
+                running.store(rhs.running.load());
+            }
+            return *this;
+        }
+
+        std::shared_ptr<SerialPort> serial;
+        std::thread reader_thread;
+        std::atomic<bool> running{false};
+    };
+
+    void StartReader(const std::string& port, PortEntry& entry);
+
+    asio::io_context& io_context_;
     mutable std::mutex mutex_;
-    std::map<std::string, std::unique_ptr<SerialPort>> ports_;
+    std::map<std::string, PortEntry> ports_;
+    DataCallback data_cb_;
 };
 
 } // namespace remote_serial
