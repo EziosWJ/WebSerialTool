@@ -1,5 +1,5 @@
 # FetchContent缓存
-set(FETCHCONTENT_BASE_DIR ${CMAKE_SOURCE_DIR}/.deps)
+# set(FETCHCONTENT_BASE_DIR ${CMAKE_SOURCE_DIR}/.deps)
 # libhv
 include(FetchContent)
 
