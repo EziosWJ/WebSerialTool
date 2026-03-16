@@ -1,5 +1,6 @@
 #include "serial/serial_manager.h"
-
+#include <glob.h>
+#include <sys/stat.h>
 #include <thread>
 
 namespace remote_serial {
@@ -90,10 +91,34 @@ void SerialManager::WritePortAsync(const std::string& port, const std::vector<ui
 }
 
 std::vector<std::string> SerialManager::ListPorts() const {
-    // TODO: implement platform-specific serial enumeration.
-    // For Linux, scan /dev/tty* or use udev
-    // For Windows, use registry or SetupAPI
-    return {"ttyUSB0", "ttyUSB1","/tmp/vserial"}; // placeholder
+    std::vector<std::string> ports;
+
+    // Patterns for real serial devices on Linux
+    const char* patterns[] = {
+        "/dev/ttyS[0-9]*",   // UART serial ports (e.g., built-in RS232)
+        "/dev/ttyUSB[0-9]*", // USB-to-serial adapters (e.g., FTDI, CH340)
+        "/dev/ttyACM[0-9]*"  // USB CDC ACM devices (e.g., Arduino)
+    };
+
+    for (const auto& pattern : patterns) {
+        glob_t glob_result;
+        int glob_ret = glob(pattern, GLOB_NOSORT, nullptr, &glob_result);
+        if (glob_ret == 0) {
+            for (size_t i = 0; i < glob_result.gl_pathc; ++i) {
+                ports.emplace_back(glob_result.gl_pathv[i]);
+            }
+        }
+        globfree(&glob_result);
+    }
+
+    // Check if simulated virtual serial port exists
+    const char* vserial = "/tmp/vserial";
+    struct stat buffer;
+    if (stat(vserial, &buffer) == 0) {
+        ports.emplace_back(vserial);
+    }
+
+    return ports;
 }
 
 void SerialManager::StartReader(const std::string& port, PortEntry& entry) {
