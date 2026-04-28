@@ -3,13 +3,11 @@
 #include "serial/serial_port.h"
 
 #include <asio.hpp>
-#include <atomic>
-#include <chrono>
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <string>
-#include <thread>
 #include <vector>
 
 namespace remote_serial {
@@ -38,27 +36,10 @@ public:
 
 private:
     struct PortEntry {
-        PortEntry() = default;
-        PortEntry(PortEntry&& rhs) noexcept
-            : serial(std::move(rhs.serial)),
-              reader_thread(std::move(rhs.reader_thread)),
-              running(rhs.running.load()) {
-        }
-        PortEntry& operator=(PortEntry&& rhs) noexcept {
-            if (this != &rhs) {
-                serial = std::move(rhs.serial);
-                reader_thread = std::move(rhs.reader_thread);
-                running.store(rhs.running.load());
-            }
-            return *this;
-        }
-
         std::shared_ptr<SerialPort> serial;
-        std::thread reader_thread;
-        std::atomic<bool> running{false};
     };
 
-    void StartReader(const std::string& port, PortEntry& entry);
+    void OnSerialData(const std::string& port, const std::vector<uint8_t>& data);
 
     asio::io_context& io_context_;
     mutable std::mutex mutex_;

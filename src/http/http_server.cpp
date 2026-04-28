@@ -3,6 +3,7 @@
 #include <functional>
 #include <iostream>
 #include <hv/hv.h>
+#include <hv/base64.h>
 
 namespace remote_serial {
 
@@ -48,9 +49,10 @@ void HttpServer::RegisterRoutes() {
     http_service_.POST("/api/port/open", [this](const HttpContextPtr& ctx) { return HandleOpenPort(ctx); });
     http_service_.POST("/api/port/close", [this](const HttpContextPtr& ctx) { return HandleClosePort(ctx); });
     http_service_.POST("/api/port/write", [this](const HttpContextPtr& ctx) { return HandleWritePort(ctx); });
+    http_service_.GET("/api/logs", [this](const HttpContextPtr& ctx) { return HandleGetLogs(ctx); });
 
     // Serve static files from web/ directory
-    http_service_.Static("/", "/home/wangjian/cpp/remoteSerial/web");
+    http_service_.Static("/", WEB_ROOT);
 }
 
 void HttpServer::RegisterWebSocket() {
@@ -120,11 +122,21 @@ int HttpServer::HandleWritePort(const HttpContextPtr& ctx) {
         } else if (format == "ascii") {
             data.assign(data_str.begin(), data_str.end());
         } else if (format == "base64") {
-            // TODO: implement base64 decode
-            data.assign(data_str.begin(), data_str.end());
+            size_t buf_len = (data_str.size() * 3) / 4;
+            std::vector<uint8_t> buf(buf_len);
+            int decoded = hv_base64_decode(data_str.data(), data_str.size(), buf.data());
+            if (decoded < 0) {
+                nlohmann::json response = {{"code", 1}, {"msg", "base64 decode failed"}};
+                return ctx->sendJson(response);
+            }
+            buf.resize(decoded);
+            data = std::move(buf);
         }
 
         bool success = manager_->WritePort(port, data);
+        if (success) {
+            log_saver_.OnTx(port, data);
+        }
         nlohmann::json response = {{"code", success ? 0 : 1}, {"msg", success ? "ok" : "failed"}};
         return ctx->sendJson(response);
     } catch (const std::exception& e) {
@@ -133,24 +145,69 @@ int HttpServer::HandleWritePort(const HttpContextPtr& ctx) {
     }
 }
 
+int HttpServer::HandleGetLogs(const HttpContextPtr& ctx) {
+    std::string port = ctx->param("port", "");
+    nlohmann::json response;
+
+    if (port.empty()) {
+        // List available log files
+        auto logs = log_saver_.ListLogs();
+        response["logs"] = logs;
+    } else {
+        // Return log content for specific port
+        response["port"] = port;
+        response["content"] = log_saver_.ReadLog(port);
+    }
+
+    return ctx->sendJson(response);
+}
+
 void HttpServer::OnWebSocketOpen(const WebSocketChannelPtr& channel, const HttpRequestPtr& req) {
     Logger::Info("WebSocket client connected");
     std::lock_guard<std::mutex> lock(ws_mutex_);
     ws_clients_.insert(channel);
+    client_subscriptions_[channel] = {}; // initially subscribed to nothing
 }
 
 void HttpServer::OnWebSocketMessage(const WebSocketChannelPtr& channel, const std::string& msg) {
-    // TODO: handle WebSocket messages, e.g., subscribe to port data
-    Logger::Info("WebSocket message: " + msg);
+    try {
+        auto json = nlohmann::json::parse(msg);
+        std::string type = json["type"];
+
+        std::lock_guard<std::mutex> lock(ws_mutex_);
+
+        if (type == "subscribe") {
+            std::string port = json["port"];
+            client_subscriptions_[channel].insert(port);
+            Logger::Info("Client subscribed to " + port);
+        } else if (type == "unsubscribe") {
+            std::string port = json["port"];
+            client_subscriptions_[channel].erase(port);
+            Logger::Info("Client unsubscribed from " + port);
+        } else if (type == "list") {
+            nlohmann::json resp;
+            resp["type"] = "subscriptions";
+            auto& ports = resp["ports"] = nlohmann::json::array();
+            for (const auto& p : client_subscriptions_[channel]) {
+                ports.push_back(p);
+            }
+            channel->send(resp.dump());
+        }
+    } catch (const std::exception& e) {
+        Logger::Warn("Invalid WebSocket message: " + msg);
+    }
 }
 
 void HttpServer::OnWebSocketClose(const WebSocketChannelPtr& channel) {
     Logger::Info("WebSocket client disconnected");
     std::lock_guard<std::mutex> lock(ws_mutex_);
     ws_clients_.erase(channel);
+    client_subscriptions_.erase(channel);
 }
 
 void HttpServer::BroadcastSerialData(const std::string& port, const std::vector<uint8_t>& data) {
+    log_saver_.OnRx(port, data);
+
     nlohmann::json message;
     message["port"] = port;
     message["data"] = "";
@@ -182,7 +239,10 @@ void HttpServer::BroadcastSerialData(const std::string& port, const std::vector<
     std::lock_guard<std::mutex> lock(ws_mutex_);
     for (auto& ch : ws_clients_) {
         if (ch && ch->isConnected()) {
-            ch->send(payload);
+            auto it = client_subscriptions_.find(ch);
+            if (it != client_subscriptions_.end() && (it->second.empty() || it->second.count(port))) {
+                ch->send(payload);
+            }
         }
     }
 }

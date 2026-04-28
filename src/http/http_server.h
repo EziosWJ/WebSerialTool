@@ -1,10 +1,12 @@
 #pragma once
 
 #include "serial/serial_manager.h"
+#include "utils/log_saver.h"
 
 #include <hv/HttpService.h>
 #include <hv/WebSocketServer.h>
 #include <nlohmann/json.hpp>
+#include <map>
 #include <set>
 #include <mutex>
 #include <string>
@@ -28,6 +30,7 @@ private:
     int HandleOpenPort(const HttpContextPtr& ctx);
     int HandleClosePort(const HttpContextPtr& ctx);
     int HandleWritePort(const HttpContextPtr& ctx);
+    int HandleGetLogs(const HttpContextPtr& ctx);
 
     // WebSocket handlers
     void OnWebSocketOpen(const WebSocketChannelPtr& channel, const HttpRequestPtr& req);
@@ -37,6 +40,7 @@ private:
     void BroadcastSerialData(const std::string& port, const std::vector<uint8_t>& data);
 
     SerialManager* manager_ = nullptr;
+    LogSaver log_saver_;
     hv::HttpService http_service_;
     hv::WebSocketService ws_service_;
     hv::WebSocketServer server_;
@@ -45,6 +49,7 @@ private:
     // WebSocket clients
     std::mutex ws_mutex_;
     std::set<WebSocketChannelPtr> ws_clients_;
+    std::map<WebSocketChannelPtr, std::set<std::string>> client_subscriptions_;
 };
 
 } // namespace remote_serial

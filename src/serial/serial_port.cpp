@@ -16,13 +16,10 @@ bool SerialPort::Open(int baudrate, int databits, int stopbits, const std::strin
     try {
         serial_port_ = std::make_unique<asio::serial_port>(io_context_, device_);
 
-        // Set baud rate
         serial_port_->set_option(asio::serial_port::baud_rate(baudrate));
 
-        // Set character size
         serial_port_->set_option(asio::serial_port::character_size(databits));
 
-        // Set stop bits
         if (stopbits == 1) {
             serial_port_->set_option(asio::serial_port::stop_bits(asio::serial_port::stop_bits::one));
         } else if (stopbits == 2) {
@@ -31,7 +28,6 @@ bool SerialPort::Open(int baudrate, int databits, int stopbits, const std::strin
             return false;
         }
 
-        // Set parity
         if (parity == "none") {
             serial_port_->set_option(asio::serial_port::parity(asio::serial_port::parity::none));
         } else if (parity == "odd") {
@@ -44,14 +40,15 @@ bool SerialPort::Open(int baudrate, int databits, int stopbits, const std::strin
 
         return true;
     } catch (const std::exception& e) {
-        // Log error
         return false;
     }
 }
 
 void SerialPort::Close() {
+    StopAsyncRead();
     if (serial_port_ && serial_port_->is_open()) {
-        serial_port_->close();
+        asio::error_code ec;
+        serial_port_->close(ec);
     }
     serial_port_.reset();
 }
@@ -81,8 +78,6 @@ void SerialPort::WriteAsync(const std::vector<uint8_t>& data, std::function<void
 }
 
 std::vector<uint8_t> SerialPort::Read() {
-    // For simplicity, read available data synchronously
-    // In real implementation, this should be asynchronous
     if (!serial_port_ || !serial_port_->is_open()) {
         return {};
     }
@@ -99,6 +94,45 @@ std::vector<uint8_t> SerialPort::Read() {
 
 bool SerialPort::IsOpen() const {
     return serial_port_ && serial_port_->is_open();
+}
+
+void SerialPort::StartAsyncRead(DataCallback callback) {
+    data_callback_ = std::move(callback);
+    reading_.store(true);
+    DoAsyncRead();
+}
+
+void SerialPort::StopAsyncRead() {
+    reading_.store(false);
+    if (serial_port_ && serial_port_->is_open()) {
+        asio::error_code ec;
+        serial_port_->cancel(ec);
+    }
+}
+
+void SerialPort::DoAsyncRead() {
+    if (!reading_.load() || !serial_port_ || !serial_port_->is_open()) {
+        return;
+    }
+
+    auto self = shared_from_this();
+    serial_port_->async_read_some(asio::buffer(read_buffer_),
+        [this, self](const asio::error_code& ec, size_t bytes_read) {
+            if (!reading_.load() || ec) {
+                // Notify error/EOF with empty data
+                if (data_callback_) {
+                    data_callback_({});
+                }
+                return;
+            }
+
+            if (bytes_read > 0 && data_callback_) {
+                data_callback_({read_buffer_.begin(), read_buffer_.begin() + bytes_read});
+            }
+
+            // Continue reading
+            DoAsyncRead();
+        });
 }
 
 } // namespace remote_serial

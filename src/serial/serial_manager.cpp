@@ -1,7 +1,7 @@
 #include "serial/serial_manager.h"
+#include "utils/logger.h"
 #include <glob.h>
 #include <sys/stat.h>
-#include <thread>
 
 namespace remote_serial {
 
@@ -10,17 +10,7 @@ SerialManager::SerialManager(asio::io_context& io_context)
 }
 
 SerialManager::~SerialManager() {
-    // Ensure all ports are closed and threads are stopped.
     std::lock_guard<std::mutex> lock(mutex_);
-    for (auto& [port, entry] : ports_) {
-        entry.running = false;
-        if (entry.reader_thread.joinable()) {
-            entry.reader_thread.join();
-        }
-        if (entry.serial) {
-            entry.serial->Close();
-        }
-    }
     ports_.clear();
 }
 
@@ -37,7 +27,7 @@ bool SerialManager::OpenPort(const std::string& port,
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = ports_.find(port);
     if (it != ports_.end() && it->second.serial && it->second.serial->IsOpen()) {
-        return true; // already open
+        return true;
     }
 
     PortEntry entry;
@@ -46,8 +36,19 @@ bool SerialManager::OpenPort(const std::string& port,
         return false;
     }
 
-    entry.running = true;
-    StartReader(port, entry);
+    // Start async reads - the callback wraps data_cb_ with the port name
+    entry.serial->StartAsyncRead([this, port](const std::vector<uint8_t>& data) {
+        if (data.empty()) {
+            // error/EOF: port disconnected, remove it
+            Logger::Warn("Serial port " + port + " disconnected");
+            ClosePort(port);
+            return;
+        }
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (data_cb_) {
+            data_cb_(port, data);
+        }
+    });
 
     ports_[port] = std::move(entry);
     return true;
@@ -60,13 +61,6 @@ bool SerialManager::ClosePort(const std::string& port) {
         return false;
     }
 
-    it->second.running = false;
-    if (it->second.reader_thread.joinable()) {
-        it->second.reader_thread.join();
-    }
-    if (it->second.serial) {
-        it->second.serial->Close();
-    }
     ports_.erase(it);
     return true;
 }
@@ -93,11 +87,10 @@ void SerialManager::WritePortAsync(const std::string& port, const std::vector<ui
 std::vector<std::string> SerialManager::ListPorts() const {
     std::vector<std::string> ports;
 
-    // Patterns for real serial devices on Linux
     const char* patterns[] = {
-        "/dev/ttyS[0-9]*",   // UART serial ports (e.g., built-in RS232)
-        "/dev/ttyUSB[0-9]*", // USB-to-serial adapters (e.g., FTDI, CH340)
-        "/dev/ttyACM[0-9]*"  // USB CDC ACM devices (e.g., Arduino)
+        "/dev/ttyS[0-9]*",
+        "/dev/ttyUSB[0-9]*",
+        "/dev/ttyACM[0-9]*"
     };
 
     for (const auto& pattern : patterns) {
@@ -111,7 +104,6 @@ std::vector<std::string> SerialManager::ListPorts() const {
         globfree(&glob_result);
     }
 
-    // Check if simulated virtual serial port exists
     const char* vserial = "/tmp/vserial";
     struct stat buffer;
     if (stat(vserial, &buffer) == 0) {
@@ -119,33 +111,6 @@ std::vector<std::string> SerialManager::ListPorts() const {
     }
 
     return ports;
-}
-
-void SerialManager::StartReader(const std::string& port, PortEntry& entry) {
-    // start a background thread to read data and invoke callback
-    entry.reader_thread = std::thread([this, port, serial = entry.serial]() {
-        while (true) {
-            {
-                std::lock_guard<std::mutex> lock(mutex_);
-                auto it = ports_.find(port);
-                if (it == ports_.end() || !it->second.running) {
-                    break;
-                }
-            }
-            if (!serial || !serial->IsOpen()) {
-                break;
-            }
-            auto data = serial->Read();
-            if (!data.empty()) {
-                std::lock_guard<std::mutex> lock(mutex_);
-                if (data_cb_) {
-                    data_cb_(port, data);
-                }
-            }
-            // small sleep to prevent busy loop if no data
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-    });
 }
 
 } // namespace remote_serial

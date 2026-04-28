@@ -11,9 +11,11 @@ src/serial/serial_port.cpp
 src/serial/serial_manager.cpp
 src/http/http_server.cpp
 src/utils/logger.cpp
+src/utils/log_saver.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE src)
+target_compile_definitions(${PROJECT_NAME} PRIVATE WEB_ROOT="${CMAKE_SOURCE_DIR}/web")
 
 # 包含依赖项
 include(cmake/dependences.cmake)
