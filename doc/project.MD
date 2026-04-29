@@ -347,6 +347,7 @@ Linux
 /dev/ttyS*
 /dev/ttyUSB*
 /dev/ttyACM*
+/tmp/ttyV*       # 虚拟串口（socat 模拟，用于本地测试）
 ```
 
 Windows

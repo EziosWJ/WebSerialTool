@@ -43,6 +43,9 @@ int main(int argc, char** argv) {
     remote_serial::SerialManager serial_manager(io_context);
     remote_serial::HttpServer server(&serial_manager, web_root);
 
+    // Keep io_context alive even when no async operations are pending
+    auto work_guard = asio::make_work_guard(io_context);
+
     // Start io_context in a separate thread
     std::thread io_thread([&io_context]() {
         io_context.run();
@@ -58,6 +61,7 @@ int main(int argc, char** argv) {
 
     // Cleanup
     server.Stop();
+    work_guard.reset();
     io_context.stop();
     if (io_thread.joinable()) {
         io_thread.join();

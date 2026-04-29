@@ -34,6 +34,9 @@
 │   ├── css/style.css
 │   └── js/app.js
 ├── doc/                    # 设计文档
+├── script/                 # 开发辅助脚本
+│   ├── dev-serial-tcp.sh   # 虚拟串口 ←→ TCP 桥接
+│   └── dev-serial-udp.sh   # 虚拟串口 ←→ UDP 桥接
 └── build/                  # 构建输出
 ```
 
@@ -48,6 +51,16 @@ make -j$(nproc)
 ```
 
 Web 根目录自动检测：`--web-root` 参数 > exe 同级 `web/` > exe 上级 `web/` > 回退 `web/`。
+
+### 本地测试
+
+需要 `socat`，使用脚本创建虚拟串口：
+
+```bash
+./script/dev-serial-tcp.sh          # 创建 /tmp/ttyV0 ←→ TCP:9000
+./build/remoteSerial                # 另开终端启动服务
+nc 127.0.0.1 9000                   # nc 模拟串口设备
+```
 
 ## REST API
 

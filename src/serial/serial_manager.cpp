@@ -90,7 +90,8 @@ std::vector<std::string> SerialManager::ListPorts() const {
     const char* patterns[] = {
         "/dev/ttyS[0-9]*",
         "/dev/ttyUSB[0-9]*",
-        "/dev/ttyACM[0-9]*"
+        "/dev/ttyACM[0-9]*",
+        "/tmp/ttyV[0-9]*"
     };
 
     for (const auto& pattern : patterns) {
