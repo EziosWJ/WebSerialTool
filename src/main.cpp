@@ -21,6 +21,18 @@ extern "C" {
 int main(int argc, char** argv) {
     remote_serial::Logger::Init();
 
+    // Parse command-line arguments
+    std::string web_root;
+    int port = 8080;
+    for (int i = 1; i < argc; i++) {
+        std::string arg(argv[i]);
+        if (arg == "--web-root" && i + 1 < argc) {
+            web_root = argv[++i];
+        } else if (arg == "--port" && i + 1 < argc) {
+            port = std::atoi(argv[++i]);
+        }
+    }
+
     // Setup self-pipe for signal notification
     pipe(g_signal_fds);
     fcntl(g_signal_fds[1], F_SETFL, O_NONBLOCK);
@@ -29,14 +41,14 @@ int main(int argc, char** argv) {
 
     asio::io_context io_context;
     remote_serial::SerialManager serial_manager(io_context);
-    remote_serial::HttpServer server(&serial_manager);
+    remote_serial::HttpServer server(&serial_manager, web_root);
 
     // Start io_context in a separate thread
     std::thread io_thread([&io_context]() {
         io_context.run();
     });
 
-    server.Start(8080);
+    server.Start(port);
     remote_serial::Logger::Info("Started web serial server on port 8080");
 
     // Block until signal received

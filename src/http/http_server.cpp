@@ -2,13 +2,16 @@
 #include "utils/logger.h"
 #include <functional>
 #include <iostream>
+#include <climits>
+#include <unistd.h>
+#include <sys/stat.h>
 #include <hv/hv.h>
 #include <hv/base64.h>
 
 namespace remote_serial {
 
-HttpServer::HttpServer(SerialManager* manager)
-    : manager_(manager) {
+HttpServer::HttpServer(SerialManager* manager, const std::string& web_root)
+    : manager_(manager), web_root_(web_root) {
     if (manager_) {
         manager_->SetDataCallback([this](const std::string& port, const std::vector<uint8_t>& data) {
             BroadcastSerialData(port, data);
@@ -23,6 +26,41 @@ HttpServer::~HttpServer() {
 bool HttpServer::Start(int port) {
     port_ = port;
     Logger::Info("HttpServer starting on port " + std::to_string(port));
+
+    // Resolve web root if not configured
+    if (web_root_.empty()) {
+        auto try_dir = [this](const std::string& dir) -> bool {
+            std::string candidate = dir + "/web";
+            struct stat st;
+            if (stat(candidate.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) {
+                web_root_ = candidate;
+                return true;
+            }
+            return false;
+        };
+
+        char buf[PATH_MAX];
+        ssize_t len = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+        if (len != -1) {
+            buf[len] = '\0';
+            std::string exe_path(buf);
+            auto pos = exe_path.find_last_of('/');
+            if (pos != std::string::npos) {
+                std::string exe_dir = exe_path.substr(0, pos);
+                // Check exe_dir/web first, then parent_dir/web
+                if (!try_dir(exe_dir)) {
+                    auto parent_pos = exe_dir.find_last_of('/');
+                    if (parent_pos != std::string::npos) {
+                        try_dir(exe_dir.substr(0, parent_pos));
+                    }
+                }
+            }
+        }
+        if (web_root_.empty()) {
+            web_root_ = "web";
+        }
+    }
+    Logger::Info("Web root: " + web_root_);
 
     RegisterRoutes();
     RegisterWebSocket();
@@ -52,7 +90,7 @@ void HttpServer::RegisterRoutes() {
     http_service_.GET("/api/logs", [this](const HttpContextPtr& ctx) { return HandleGetLogs(ctx); });
 
     // Serve static files from web/ directory
-    http_service_.Static("/", WEB_ROOT);
+    http_service_.Static("/", web_root_.c_str());
 }
 
 void HttpServer::RegisterWebSocket() {

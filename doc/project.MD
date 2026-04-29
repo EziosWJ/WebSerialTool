@@ -536,11 +536,7 @@ ASCII发送
 
 # 9 构建系统
 
-推荐：
-
-```
-CMake
-```
+推荐：**CMake**
 
 原因：
 
@@ -551,18 +547,36 @@ CMake
 
 ## Linux 编译
 
-```
+```bash
 mkdir build
 cd build
 cmake ..
-make
+make -j$(nproc)
 ```
 
 生成：
 
 ```
-serial_web_server
+build/remoteSerial
 ```
+
+## 运行时配置
+
+可执行文件支持命令行参数：
+
+```
+./remoteSerial                               # 默认端口 8080，自动检测 web/ 目录
+./remoteSerial --port 9090                   # 指定端口
+./remoteSerial --web-root /opt/my/web        # 指定 web 静态文件目录
+./remoteSerial --port 9090 --web-root ./web  # 组合使用
+```
+
+Web 根目录解析优先级：
+
+1. `--web-root` 命令行参数指定的路径
+2. 可执行文件同级目录下的 `web/` 文件夹
+3. 可执行文件上级目录下的 `web/` 文件夹（开发场景：exe 在 build/，web 在项目根目录）
+4. 回退到当前工作目录下的 `web/`
 
 ---
 
@@ -570,8 +584,8 @@ serial_web_server
 
 ## Linux
 
-```
-./serial_web_server
+```bash
+./remoteSerial --port 8080 --web-root /opt/webserial/web
 ```
 
 访问：

@@ -15,11 +15,13 @@ namespace remote_serial {
 
 class HttpServer {
 public:
-    explicit HttpServer(SerialManager* manager);
+    explicit HttpServer(SerialManager* manager, const std::string& web_root = "");
     ~HttpServer();
 
     bool Start(int port);
     void Stop();
+
+    void SetWebRoot(const std::string& path) { web_root_ = path; }
 
 private:
     void RegisterRoutes();
@@ -45,6 +47,7 @@ private:
     hv::WebSocketService ws_service_;
     hv::WebSocketServer server_;
     int port_ = 0;
+    std::string web_root_;
 
     // WebSocket clients
     std::mutex ws_mutex_;

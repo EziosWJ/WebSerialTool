@@ -51,4 +51,17 @@ git clone https://github.com/EziosWJ/WebSerialTool.git
 cd WebSerialTool
 mkdir build && cd build
 cmake ..
-make -j $ (nproc)
+make -j $(nproc)
+```
+
+#### Run
+
+```bash
+./build/remoteSerial                        # 默认端口 8080，自动检测 web/ 目录
+./build/remoteSerial --port 9090            # 指定端口
+./build/remoteSerial --web-root /path/to/web
+```
+
+打开浏览器访问 `http://localhost:8080`。
+
+> Web 根目录自动检测优先级：`--web-root` 参数 > exe 同级 `web/` > exe 上级 `web/` > 回退 CWD 下 `web/`。
