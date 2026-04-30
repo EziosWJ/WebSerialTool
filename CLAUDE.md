@@ -66,12 +66,24 @@
 
 ## 构建 & 运行
 
+项目配置了 CMakePresets.json，使用 Ninja 生成器：
+
 ```bash
+# 使用预设构建（推荐）
+cmake --preset x64
+cmake --build out/build/x64
+
+# 或传统方式
 mkdir -p build && cd build
 cmake ..
 make -j$(nproc)
-./remoteSerial            # 默认端口 8080，自动检测 web/
-./remoteSerial --port 9090 --web-root /path/to/web
+```
+
+运行：
+
+```bash
+./out/build/x64/remoteSerial          # 默认端口 8080，自动检测 web/
+./out/build/x64/remoteSerial --port 9090 --web-root /path/to/web
 ```
 
 Web 根目录自动检测：`--web-root` 参数 > exe 同级 `web/` > exe 上级 `web/` > 回退 `web/`。
