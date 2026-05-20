@@ -139,3 +139,17 @@ WebSocket 端点 `/ws`，串口接收数据实时推送到订阅客户端。
 ### 安全意识
 - 勿在代码中硬编码密码/token
 - HTTPS 和登录认证为可选增强特性，不影响核心功能
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues（`EziosWJ/WebSerialTool`）。详见 `docs/agents/issue-tracker.md`。
+
+### Triage labels
+
+五个标准标签：`needs-triage`、`needs-info`、`ready-for-agent`、`ready-for-human`、`wontfix`。详见 `docs/agents/triage-labels.md`。
+
+### Domain docs
+
+单上下文布局，`CONTEXT.md` + `docs/adr/` 均在仓库根目录。详见 `docs/agents/domain.md`。

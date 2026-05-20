@@ -1,6 +1,7 @@
 #pragma once
 
 #include "serial/serial_manager.h"
+#include "modbus/modbus_manager.h"
 #include "utils/log_saver.h"
 
 #include <hv/HttpService.h>
@@ -33,6 +34,8 @@ private:
     int HandleClosePort(const HttpContextPtr& ctx);
     int HandleWritePort(const HttpContextPtr& ctx);
     int HandleGetLogs(const HttpContextPtr& ctx);
+    int HandleModbusRead(const HttpContextPtr& ctx);
+    int HandleModbusWrite(const HttpContextPtr& ctx);
 
     // WebSocket handlers
     void OnWebSocketOpen(const WebSocketChannelPtr& channel, const HttpRequestPtr& req);
@@ -42,6 +45,7 @@ private:
     void BroadcastSerialData(const std::string& port, const std::vector<uint8_t>& data);
 
     SerialManager* manager_ = nullptr;
+    ModbusManager modbus_manager_;
     LogSaver log_saver_;
     hv::HttpService http_service_;
     hv::WebSocketService ws_service_;

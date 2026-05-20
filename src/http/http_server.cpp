@@ -1,4 +1,5 @@
 #include "http/http_server.h"
+#include "modbus/modbus_rtu.h"
 #include "utils/logger.h"
 #include <functional>
 #include <iostream>
@@ -11,7 +12,7 @@
 namespace remote_serial {
 
 HttpServer::HttpServer(SerialManager* manager, const std::string& web_root)
-    : manager_(manager), web_root_(web_root) {
+    : manager_(manager), modbus_manager_(manager), web_root_(web_root) {
     if (manager_) {
         manager_->SetDataCallback([this](const std::string& port, const std::vector<uint8_t>& data) {
             BroadcastSerialData(port, data);
@@ -88,6 +89,8 @@ void HttpServer::RegisterRoutes() {
     http_service_.POST("/api/port/close", [this](const HttpContextPtr& ctx) { return HandleClosePort(ctx); });
     http_service_.POST("/api/port/write", [this](const HttpContextPtr& ctx) { return HandleWritePort(ctx); });
     http_service_.GET("/api/logs", [this](const HttpContextPtr& ctx) { return HandleGetLogs(ctx); });
+    http_service_.POST("/api/modbus/read", [this](const HttpContextPtr& ctx) { return HandleModbusRead(ctx); });
+    http_service_.POST("/api/modbus/write", [this](const HttpContextPtr& ctx) { return HandleModbusWrite(ctx); });
 
     // Serve static files from web/ directory
     http_service_.Static("/", web_root_.c_str());
@@ -243,7 +246,99 @@ void HttpServer::OnWebSocketClose(const WebSocketChannelPtr& channel) {
     client_subscriptions_.erase(channel);
 }
 
+int HttpServer::HandleModbusRead(const HttpContextPtr& ctx) {
+    try {
+        auto json = nlohmann::json::parse(ctx->body());
+        std::string port = json["port"];
+        uint8_t slave = json["slave"];
+        uint8_t function = json["function"];
+        uint16_t address = json["address"];
+        uint16_t quantity = json["quantity"];
+        int timeout = json.value("timeout", 1000);
+
+        if (function < 1 || function > 4) {
+            nlohmann::json response = {{"code", 1}, {"msg", "invalid function code, must be 1-4"}};
+            return ctx->sendJson(response);
+        }
+
+        auto result = modbus_manager_.ReadRegisters(port, slave, function, address, quantity, timeout);
+
+        nlohmann::json response;
+        response["code"] = result.code;
+        response["msg"] = result.msg;
+        if (result.code == 0) {
+            response["data"]["values"] = result.values;
+            response["data"]["raw_tx"] = result.raw_tx;
+            response["data"]["raw_rx"] = result.raw_rx;
+        }
+        return ctx->sendJson(response);
+    } catch (const std::exception& e) {
+        nlohmann::json response = {{"code", 1}, {"msg", std::string("invalid request: ") + e.what()}};
+        return ctx->sendJson(response);
+    }
+}
+
+int HttpServer::HandleModbusWrite(const HttpContextPtr& ctx) {
+    try {
+        auto json = nlohmann::json::parse(ctx->body());
+        std::string port = json["port"];
+        uint8_t slave = json["slave"];
+        uint8_t function = json["function"];
+        uint16_t address = json["address"];
+        int timeout = json.value("timeout", 1000);
+
+        uint16_t quantity_or_value = 0;
+        std::vector<uint8_t> values;
+
+        if (function == 5 || function == 6) {
+            // Single write
+            quantity_or_value = json["value"];
+        } else if (function == 15 || function == 16) {
+            // Multiple write
+            quantity_or_value = json["quantity"];
+            auto json_values = json["values"];
+            if (function == 15) {
+                // 前端发来的 0/1 数组按位打包，每字节 8 个线圈，LSB 对应第一个
+                uint8_t byte_count = (quantity_or_value + 7) / 8;
+                values.resize(byte_count, 0);
+                for (size_t i = 0; i < json_values.size(); ++i) {
+                    if (json_values[i].get<int>()) {
+                        values[i / 8] |= (1 << (i % 8));
+                    }
+                }
+            } else {
+                // Registers: 16-bit values to bytes
+                for (auto& v : json_values) {
+                    uint16_t val = v.get<uint16_t>();
+                    values.push_back(static_cast<uint8_t>((val >> 8) & 0xFF));
+                    values.push_back(static_cast<uint8_t>(val & 0xFF));
+                }
+            }
+        } else {
+            nlohmann::json response = {{"code", 1}, {"msg", "invalid function code, must be 5/6/15/16"}};
+            return ctx->sendJson(response);
+        }
+
+        auto result = modbus_manager_.WriteRegisters(port, slave, function, address,
+                                                      quantity_or_value, values, timeout);
+
+        nlohmann::json response;
+        response["code"] = result.code;
+        response["msg"] = result.msg;
+        if (result.code == 0) {
+            response["data"]["raw_tx"] = result.raw_tx;
+            response["data"]["raw_rx"] = result.raw_rx;
+        }
+        return ctx->sendJson(response);
+    } catch (const std::exception& e) {
+        nlohmann::json response = {{"code", 1}, {"msg", std::string("invalid request: ") + e.what()}};
+        return ctx->sendJson(response);
+    }
+}
+
 void HttpServer::BroadcastSerialData(const std::string& port, const std::vector<uint8_t>& data) {
+    // 必须先于 WebSocket 广播，确保 Modbus 响应被事务管理器优先消费
+    modbus_manager_.FeedResponse(port, data);
     log_saver_.OnRx(port, data);
 
     nlohmann::json message;

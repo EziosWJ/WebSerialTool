@@ -1,81 +1,195 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Remote Serial</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body>
   <div class="app">
-    <header>
-      <h1>Remote Serial Debug</h1>
-      <div class="status" id="status">Status: <span id="statusText">disconnected</span></div>
-    </header>
-
-    <section class="panel">
-      <h2>串口设置</h2>
-      <div class="form-row">
-        <label>串口：</label>
-        <select id="ports"></select>
-        <button id="refresh">刷新</button>
-      </div>
-      <div class="form-row">
-        <label>波特率：</label>
-        <input id="baud" type="number" value="115200" />
-        <label>数据位：</label>
-        <select id="databits">
-          <option>8</option>
-          <option>7</option>
-          <option>6</option>
-          <option>5</option>
-        </select>
-        <label>停止位：</label>
-        <select id="stopbits">
-          <option>1</option>
-          <option>2</option>
-        </select>
-        <label>校验：</label>
-        <select id="parity">
-          <option value="none">None</option>
-          <option value="even">Even</option>
-          <option value="odd">Odd</option>
-        </select>
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <span class="logo-icon">&#9651;</span>
+          <span class="logo-text">SERIAL<br/><small>DEBUG TOOL</small></span>
+        </div>
+        <div class="status-led" id="statusLed" title="disconnected">
+          <span class="led"></span>
+          <span class="led-label" id="statusText">OFFLINE</span>
+        </div>
       </div>
 
-      <div class="buttons">
-        <button id="openBtn">打开</button>
-        <button id="closeBtn" disabled>关闭</button>
-      </div>
-    </section>
+      <nav class="mode-tabs">
+        <button class="mode-tab active" data-mode="serial">SERIAL</button>
+        <button class="mode-tab" data-mode="modbus">MODBUS</button>
+      </nav>
 
-    <section class="panel">
-      <h2>发送数据</h2>
-      <div class="form-row">
-        <textarea id="sendData" rows="3" placeholder="输入要发送的内容"></textarea>
+      <div class="panel-group" data-mode="serial">
+        <div class="panel-label">PORT</div>
+        <div class="control-row">
+          <select id="ports" class="select-port"></select>
+          <button id="refresh" class="btn-icon" title="刷新端口">&#8635;</button>
+        </div>
       </div>
-      <div class="form-row">
-        <label>格式：</label>
-        <select id="sendFormat">
-          <option value="ascii" selected>ASCII</option>
+
+      <div class="panel-group" data-mode="serial">
+        <div class="panel-label">PARAMETERS</div>
+        <div class="param-grid">
+          <div class="param-item">
+            <span class="param-key">BAUD</span>
+            <input id="baud" type="number" value="115200" class="param-value" />
+          </div>
+          <div class="param-item">
+            <span class="param-key">DATA</span>
+            <select id="databits" class="param-value">
+              <option>8</option>
+              <option>7</option>
+              <option>6</option>
+              <option>5</option>
+            </select>
+          </div>
+          <div class="param-item">
+            <span class="param-key">STOP</span>
+            <select id="stopbits" class="param-value">
+              <option>1</option>
+              <option>2</option>
+            </select>
+          </div>
+          <div class="param-item">
+            <span class="param-key">PARITY</span>
+            <select id="parity" class="param-value">
+              <option value="none">NONE</option>
+              <option value="even">EVEN</option>
+              <option value="odd">ODD</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-group" data-mode="serial">
+        <div class="btn-group">
+          <button id="openBtn" class="btn-primary">OPEN PORT</button>
+          <button id="closeBtn" class="btn-danger" disabled>CLOSE</button>
+        </div>
+      </div>
+
+      <div class="sidebar-footer">
+        <span class="version">v1.0</span>
+      </div>
+    </aside>
+
+    <main class="main">
+      <!-- Modbus panel -->
+      <div class="modbus-panel" id="modbusPanel" style="display:none">
+        <div class="modbus-params">
+          <div class="modbus-row">
+            <div class="modbus-field">
+              <span class="modbus-label">SLAVE</span>
+              <input id="modbusSlave" type="number" value="1" min="1" max="247" />
+            </div>
+            <div class="modbus-field">
+              <span class="modbus-label">FUNCTION</span>
+              <select id="modbusFunction">
+                <option value="3">03 - Read Holding Regs</option>
+                <option value="4">04 - Read Input Regs</option>
+                <option value="1">01 - Read Coils</option>
+                <option value="2">02 - Read Discrete Inputs</option>
+                <option value="6">06 - Write Single Reg</option>
+                <option value="16">16 - Write Multiple Regs</option>
+                <option value="5">05 - Write Single Coil</option>
+                <option value="15">15 - Write Multiple Coils</option>
+              </select>
+            </div>
+          </div>
+          <div class="modbus-row">
+            <div class="modbus-field">
+              <span class="modbus-label">ADDRESS</span>
+              <input id="modbusAddress" type="number" value="0" min="0" max="65535" />
+            </div>
+            <div class="modbus-field" id="modbusQuantityField">
+              <span class="modbus-label">QUANTITY</span>
+              <input id="modbusQuantity" type="number" value="1" min="1" max="125" />
+            </div>
+            <div class="modbus-field" id="modbusValueField" style="display:none">
+              <span class="modbus-label">VALUE</span>
+              <input id="modbusValue" type="text" placeholder="0" />
+            </div>
+          </div>
+          <div class="modbus-row">
+            <div class="modbus-field">
+              <span class="modbus-label">TIMEOUT (ms)</span>
+              <input id="modbusTimeout" type="number" value="1000" min="100" max="10000" />
+            </div>
+            <div class="modbus-field">
+              <span class="modbus-label">POLL (ms)</span>
+              <input id="modbusPoll" type="number" value="0" min="0" placeholder="0=disabled" />
+            </div>
+          </div>
+          <div class="modbus-actions">
+            <button id="modbusSend" class="btn-primary">SEND REQUEST</button>
+            <button id="modbusPollBtn" class="btn-poll" disabled>POLL</button>
+          </div>
+        </div>
+
+        <div class="modbus-response">
+          <div class="modbus-response-header">
+            <span class="modbus-section-title">RESPONSE</span>
+            <select id="modbusDataFormat" class="ctrl-select">
+              <option value="uint16">UINT16</option>
+              <option value="int16">INT16</option>
+              <option value="hex">HEX</option>
+              <option value="float32">FLOAT32 (2 regs)</option>
+              <option value="int32">INT32 (2 regs)</option>
+            </select>
+          </div>
+          <div class="modbus-table-wrap">
+            <table class="modbus-table" id="modbusTable">
+              <thead><tr><th>ADDR</th><th>HEX</th><th>DEC</th></tr></thead>
+              <tbody id="modbusTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="modbus-raw">
+          <div class="modbus-section-title">RAW FRAMES</div>
+          <div class="modbus-raw-line"><span class="modbus-raw-label">TX:</span><span id="modbusRawTx" class="modbus-raw-data">-</span></div>
+          <div class="modbus-raw-line"><span class="modbus-raw-label">RX:</span><span id="modbusRawRx" class="modbus-raw-data">-</span></div>
+        </div>
+      </div>
+
+      <div class="send-bar" data-mode="serial">
+        <div class="send-input-wrap">
+          <textarea id="sendData" rows="1" placeholder="输入要发送的数据..."></textarea>
+        </div>
+        <select id="sendFormat" class="send-format">
+          <option value="ascii">ASCII</option>
           <option value="hex">HEX</option>
         </select>
-        <button id="sendBtn">发送</button>
+        <button id="sendBtn" class="btn-send">SEND</button>
       </div>
-    </section>
 
-    <section class="panel">
-      <h2>接收数据</h2>
-      <div class="toolbar">
-        <label>显示：</label>
-        <select id="displayFormat">
-          <option value="hex">HEX</option>
-          <option value="ascii" selected>ASCII</option>
-        </select>
-        <button id="clearBtn">清空</button>
+      <div class="log-header" data-mode="serial">
+        <div class="log-tabs">
+          <span class="log-tab active">CONSOLE</span>
+        </div>
+        <div class="log-controls">
+          <select id="displayFormat" class="ctrl-select">
+            <option value="ascii">ASCII</option>
+            <option value="hex">HEX</option>
+          </select>
+          <button id="clearBtn" class="btn-icon-sm" title="清空日志">&#10005;</button>
+          <button id="scrollLockBtn" class="btn-icon-sm active" title="自动滚动">&#8595;</button>
+        </div>
       </div>
-      <pre id="log" class="log"></pre>
-    </section>
+      <div class="log-wrap" data-mode="serial">
+        <pre id="log" class="log"></pre>
+        <div class="scanline"></div>
+      </div>
+    </main>
   </div>
 
   <script src="/js/app.js"></script>

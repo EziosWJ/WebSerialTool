@@ -10,6 +10,8 @@ src/main.cpp
 src/serial/serial_port.cpp
 src/serial/serial_manager.cpp
 src/http/http_server.cpp
+src/modbus/modbus_rtu.cpp
+src/modbus/modbus_manager.cpp
 src/utils/logger.cpp
 src/utils/log_saver.cpp
 )
